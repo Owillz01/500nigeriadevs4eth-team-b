@@ -12,6 +12,7 @@ contract PlasticSustainability {
     uint public participantIndex = 0;   //participant index
     uint public agentIndex = 0;         //collection agent index
     uint public wasteBinIndex = 0;      //number of waste bins
+    uint public weightPicked = 0;
 
     //Structs
     struct CollectionAgent {
@@ -31,7 +32,7 @@ contract PlasticSustainability {
         string fullName;                //participant's name
         string email;                   //participant's email
         uint phoneNumber;               //participant's phone number
-        uint plasticPicked;             //amount of plastics picked
+        uint weightPicked;                    //amount of plastics picked
         bool paid;                      //remaining balance
     }
 
@@ -48,6 +49,7 @@ contract PlasticSustainability {
     event ParticipantAdded(string msg, address indexed _address);
     event ParticipantRemoved(string msg, address indexed  _address);
     event WasteBinAdded(string msg, string indexed location, uint indexed capacity, address indexed _address);
+    event ParticipantDonated(string msg, address indexed _addressP, address indexed _addressW, uint indexed weight);
 
     //Modifiers
     modifier onlyOwner() {
@@ -89,7 +91,7 @@ contract PlasticSustainability {
         string memory _location,
         address _address
         ) public onlyAdminOrOwner
-        {
+    {
         CollectionAgent memory _collectionAgentStruct;
         require(_collectionAgentStruct.isAuthorized == false, 'CollectionAgent already exists');
         _collectionAgentStruct.fullName = _fullName;
@@ -115,14 +117,14 @@ contract PlasticSustainability {
         uint _capacity,
         address _address
         ) public onlyAdminOrOwner
-        {
-    WasteBin memory _wasteBinStruct;
-    _wasteBinStruct.location = _location;
-    _wasteBinStruct.isFull = false;
-    _wasteBinStruct.capacity = _capacity;
-    wasteBins[_address] = _wasteBinStruct;
-    wasteBinIndex = wasteBinIndex.add(1);
-    emit WasteBinAdded('New WasteBin added:', _location, _capacity, _address);
+    {
+        WasteBin memory _wasteBinStruct;
+        _wasteBinStruct.location = _location;
+        _wasteBinStruct.isFull = false;
+        _wasteBinStruct.capacity = _capacity;
+        wasteBins[_address] = _wasteBinStruct;
+        wasteBinIndex = wasteBinIndex.add(1);
+        emit WasteBinAdded('New WasteBin added:', _location, _capacity, _address);
     }
     
     //Remove Waste Bin function
@@ -144,7 +146,7 @@ contract PlasticSustainability {
         _participantStruct.fullName = _fullName;
         _participantStruct.email = _email;
         _participantStruct.phoneNumber = _phoneNumber;
-        _participantStruct.plasticPicked = 0;
+        _participantStruct.weightPicked = 0;
 		_participantStruct.paid = false;
 		participants[_address] = _participantStruct;
         participantIndex = participantIndex.add(1);
@@ -159,4 +161,18 @@ contract PlasticSustainability {
         emit ParticipantRemoved('Participant removed:', _address);
     }
 
+    //Function to deposit plastic
+    function depositPlastic(address _addressP, address _addressW, uint _weight) public {
+        Participant memory participant;
+        participants[_addressP] = participant;
+        participant.weightPicked += _weight;
+        participant.paid = false;
+        WasteBin memory wasteBin;
+        wasteBins[_addressW] = wasteBin;
+        require(wasteBin.isFull == false, 'Waste Bin already full');
+        require(wasteBin.capacity <= _weight, 'Waste Bin already full');
+        wasteBin.capacity -= _weight;
+        emit ParticipantDonated('Participant donated:', _addressP, _addressW, _weight);
+    }
+    
 }
