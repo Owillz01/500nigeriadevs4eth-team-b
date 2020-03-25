@@ -2,7 +2,7 @@ pragma solidity >=0.5.0 <0.7.0;
 
 import "./SafeMath.sol";
 
-contract PlasticSustainability {
+contract PickNChop {
 
     using SafeMath for uint;            // calls SafeMath library
 
