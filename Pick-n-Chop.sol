@@ -4,7 +4,7 @@ import "./SafeMath.sol";
 
 contract PickNChop {
 
-    using SafeMath for uint;            // calls SafeMath library
+    using SafeMath for uint;            //calls SafeMath library
 
     //State variables
     address internal owner;             //owner address
@@ -13,6 +13,8 @@ contract PickNChop {
     uint public agentIndex = 0;         //collection agent index
     uint public wasteBinIndex = 0;      //number of waste bins
     uint public weightPicked = 0;
+    uint public price;
+    uint public totalSold = 0;
 
     //Structs
     struct CollectionAgent {
@@ -32,7 +34,7 @@ contract PickNChop {
         string fullName;                //participant's name
         string email;                   //participant's email
         uint phoneNumber;               //participant's phone number
-        uint weightPicked;                    //amount of plastics picked
+        uint weightPicked;              //amount of plastics picked
         bool paid;                      //remaining balance
     }
 
@@ -61,11 +63,34 @@ contract PickNChop {
         require(admins[msg.sender] == true, 'Only admins can call this function');
         _;
     }
-
+    
+    modifier onlyParticipant(string memory _email) {
+        Participant memory participant;
+        require(keccak256(abi.encodePacked(participant.email)) == keccak256(abi.encodePacked(_email)), 'Not valid participant');
+        _;
+    }
+    
+    modifier onlyCollectionAgent(address _address) {
+        CollectionAgent memory collectionAgent = collectionAgents[_address];
+        require(collectionAgent.isAuthorized == true, 'Not authorized');
+        _;
+    }
+    
     //Constructor function
-    constructor() public {
+    constructor(uint _price) public {
         owner = msg.sender;
         addAdmin(owner);
+        price = _price;
+    }
+
+    //Function to multiply plastic weight and unit price
+    function multiply(uint _weight, uint _price) internal pure returns (uint z) {
+        require(_price == 0 || (z = _weight * _price) / _price == _weight);
+    }
+    
+    //Function to update the unit price per kg
+    function updatePrice(uint _price) external onlyAdminOrOwner {
+        price = _price;
     }
 
     //Add admin function
@@ -76,7 +101,7 @@ contract PickNChop {
     }
 
     //Remove admin function
-    function removeAdmin(address _adminAddress) public onlyOwner {
+    function removeAdmin(address _adminAddress) external onlyOwner {
         require(adminIndex > 1, 'Cannot operate without an admin');
         require(_adminAddress != owner, 'Cannot remove owner');
         admins[_adminAddress] = false;
@@ -86,11 +111,11 @@ contract PickNChop {
 
     //Add CollectionAgent function
     function addCollectionAgent(
-        string memory _fullName,
+        string calldata _fullName,
         uint _phoneNumber,
-        string memory _location,
+        string calldata _location,
         address _address
-        ) public onlyAdminOrOwner
+        ) external onlyAdminOrOwner
     {
         CollectionAgent memory _collectionAgentStruct;
         require(_collectionAgentStruct.isAuthorized == false, 'CollectionAgent already exists');
@@ -104,19 +129,19 @@ contract PickNChop {
     }
 
     //Remove CollectionAgent function
-    function removeCollectionAgent (address _address) public onlyAdminOrOwner {
+    function removeCollectionAgent (address _address) external onlyAdminOrOwner {
         require(_address != owner, 'Cannot remove owner');
         delete collectionAgents[_address];
         agentIndex = agentIndex.sub(1);
-        emit CollectionAgentRemoved('Collection Agent removed:',_address);
+        emit CollectionAgentRemoved('Collection Agent removed:', _address);
     }
     
     //Add Waste Bin function
     function addWasteBin (
-        string memory _location,
+        string calldata _location,
         uint _capacity,
         address _address
-        ) public onlyAdminOrOwner
+        ) external onlyAdminOrOwner
     {
         WasteBin memory _wasteBinStruct;
         _wasteBinStruct.location = _location;
@@ -128,7 +153,7 @@ contract PickNChop {
     }
     
     //Remove Waste Bin function
-    function removeWasteBin (address _address) public onlyAdminOrOwner {
+    function removeWasteBin (address _address) external onlyAdminOrOwner {
         require(_address != owner, 'Cannot remove owner');
         delete wasteBins[_address];
         wasteBinIndex = wasteBinIndex.sub(1);
@@ -137,11 +162,11 @@ contract PickNChop {
 
     //Add participant function
     function addParticipant(
-        string memory _fullName,
-        string memory _email,
+        string calldata _fullName,
+        string calldata _email,
         uint _phoneNumber,
         address _address
-        ) public {
+        ) external {
         Participant memory _participantStruct;
         _participantStruct.fullName = _fullName;
         _participantStruct.email = _email;
@@ -154,7 +179,7 @@ contract PickNChop {
     }
 
     //Remove participant function
-    function removeParticipant(address _address) public onlyAdminOrOwner {
+    function removeParticipant(address _address) external onlyAdminOrOwner {
         require(_address != owner, 'Cannot remove owner');
         delete participants[_address];
         participantIndex = participantIndex.sub(1);
@@ -162,17 +187,28 @@ contract PickNChop {
     }
 
     //Function to deposit plastic
-    function depositPlastic(address _addressP, address _addressW, uint _weight) public {
+    function depositPlastic(string calldata _email, address _addressP, address _addressW, uint _weight) external onlyParticipant(_email) {
         Participant memory participant;
         participants[_addressP] = participant;
         participant.weightPicked += _weight;
         participant.paid = false;
+        participant.email = _email;
         WasteBin memory wasteBin;
         wasteBins[_addressW] = wasteBin;
         require(wasteBin.isFull == false, 'Waste Bin already full');
         require(wasteBin.capacity <= _weight, 'Waste Bin already full');
         wasteBin.capacity -= _weight;
+        weightPicked += _weight;
         emit ParticipantDonated('Participant donated:', _addressP, _addressW, _weight);
     }
     
+    function buyPlastic(address _addressW, address _addressC, uint _weight) external payable onlyCollectionAgent(_addressC) {
+        WasteBin memory wasteBin;
+        wasteBins[_addressW] = wasteBin;
+        require(wasteBin.capacity >= _weight, 'Cannot sell more than capacity');
+        wasteBin.capacity -= _weight;
+        //require(balance(this) >= multiply(_weight, price));
+        //transfer(msg.sender, multiply(_weight, price));
+        totalSold += _weight;
+    }
 }
